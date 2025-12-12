@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Browse — Second-Hand Market</title>
+<style>
+  :root{--accent:#2f8f4f;--muted:#889799;--bg:#f4f7f8}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:#142a2a}
+  .navbar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.05)}
+  .nav-links{display:flex;gap:8px}
+  .nav-links a{padding:8px 12px;border-radius:8px;text-decoration:none;color:inherit;font-weight:600}
+  .nav-links a.active{background:var(--accent);color:#fff}
+  .container{max-width:1100px;margin:16px auto;padding:0 12px}
+  .search-row{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+  .search-input{flex:1;padding:10px;border-radius:10px;border:1px solid #e3e9e9}
+  .cat-bar{display:flex;gap:10px;overflow-x:auto;padding:10px 0}
+  .cat-btn{flex:0 0 auto;padding:8px 12px;border-radius:999px;background:#eef3f1;border:1px solid rgba(0,0,0,0.03);cursor:pointer;font-weight:700;display:inline-flex;gap:8px;align-items:center}
+  .cat-btn.selected{background:var(--accent);color:#fff;transform:translateY(-2px);box-shadow:0 8px 18px rgba(47,143,79,0.18)}
+  .items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .card{background:#fff;padding:10px;border-radius:12px;box-shadow:0 6px 16px rgba(0,0,0,.04);cursor:pointer;display:flex;flex-direction:column}
+  .card img{width:100%;height:150px;object-fit:cover;border-radius:8px;background:#e9eef0}
+  .title{font-weight:700;margin-top:8px}
+  .meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+  .price{color:var(--accent);font-weight:800}
+  .location{color:var(--muted);font-size:13px}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;justify-content:center;align-items:center;padding:18px;z-index:9999}
+  .modal{background:#fff;border-radius:12px;padding:16px;max-width:520px;width:100%;max-height:90vh;overflow:auto;position:relative}
+  .close-x{position:absolute;right:12px;top:12px;background:#000;color:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}
+  #pickupDate{width:100%;padding:10px;border:1px solid #e6eef0;border-radius:8px;margin-top:8px}
+  #getBtn{background:var(--accent);color:#fff;padding:12px;border-radius:10px;border:0;margin-top:12px;font-weight:700;cursor:pointer;width:100%}
+  @media(max-width:600px){.card img{height:120px}}
+</style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-links">
+      <a href="index.html" id="nav-home">Home</a>
+      <a href="browse.html" id="nav-browse" class="active">Browse</a>
+      <a href="donate.html" id="nav-donate">Donate</a>
+      <a href="reservations.html" id="nav-res">Reservations</a>
+      <a href="about.html" id="nav-about">About</a>
+      <a href="contact.html" id="nav-contact">Contact</a>
+    </div>
+    <div>
+      <a id="nav-login" href="login.html">Login</a>
+      <a id="nav-logout" href="#" style="display:none;background:#d9534f;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none">Logout</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="search-row">
+      <input id="searchInput" class="search-input" placeholder="Search items by name, description or location...">
+      <select id="priceFilter" style="padding:10px;border-radius:10px;border:1px solid #e3e9e9">
+        <option value="">All prices</option>
+        <option value="0">Donated (Free)</option>
+        <option value="paid">For sale</option>
+      </select>
+    </div>
+
+    <div id="catBar" class="cat-bar"></div>
+
+    <div id="itemsGrid" class="items-grid"></div>
+  </div>
+
+  <!-- Modal -->
+  <div id="modalBg" class="modal-bg">
+    <div class="modal">
+      <div class="close-x" id="closeX">X</div>
+      <img id="modalImg" style="width:100%;height:240px;object-fit:cover;border-radius:10px" alt="Item image">
+      <h2 id="modalName"></h2>
+      <p><strong>Category:</strong> <span id="modalCategory"></span></p>
+      <p><strong>Price:</strong> <span id="modalPrice"></span></p>
+      <p><strong>Location:</strong> <span id="modalLocation"></span></p>
+      <p><strong>Description:</strong> <span id="modalDesc"></span></p>
+      <p><strong>Donor:</strong> <span id="modalDonor"></span> — <a id="modalEmail"></a></p>
+
+      <label for="pickupDate">Select Pickup Day (within 7 days)</label>
+      <input id="pickupDate" type="date">
+
+      <button id="getBtn">Get Item</button>
+    </div>
+  </div>
+
+<script type="module">
+  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+  // Supabase config
+  const SUPABASE_URL = 'https://jdxdqmggyxhdycfmvygw.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkeGRxbWdneXhoZHljZm12eWd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0OTAxNzYsImV4cCI6MjA3OTA2NjE3Nn0.HFwu8W_oAsY-enrdYbe-pqBYaWY6TECAruW-yINYNrE';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Categories
+  const CATEGORIES = [
+    { key:'', label:'All', icon:'🔎' },
+    { key:'Clothes', label:'Clothes', icon:'👕' },
+    { key:'Electronics', label:'Electronics', icon:'💻' },
+    { key:'Furniture', label:'Furniture', icon:'🛋' },
+    { key:'Kitchenware', label:'Kitchenware', icon:'🍽' },
+    { key:'Books', label:'Books', icon:'📚' },
+    { key:'Other', label:'Other', icon:'📦' }
+  ];
+
+  // DOM
+  const catBar = document.getElementById('catBar');
+  const itemsGrid = document.getElementById('itemsGrid');
+  const searchInput = document.getElementById('searchInput');
+  const priceFilter = document.getElementById('priceFilter');
+  const modalBg = document.getElementById('modalBg');
+  const closeX = document.getElementById('closeX');
+  const modalImg = document.getElementById('modalImg');
+  const modalName = document.getElementById('modalName');
+  const modalCategory = document.getElementById('modalCategory');
+  const modalPrice = document.getElementById('modalPrice');
+  const modalLocation = document.getElementById('modalLocation');
+  const modalDesc = document.getElementById('modalDesc');
+  const modalDonor = document.getElementById('modalDonor');
+  const modalEmail = document.getElementById('modalEmail');
+  const pickupDate = document.getElementById('pickupDate');
+  const getBtn = document.getElementById('getBtn');
+
+  let allItems = [];
+  let selectedCategory = '';
+  let selectedItem = null;
+
+  // Render categories
+  function renderCategories(){
+    catBar.innerHTML = '';
+    CATEGORIES.forEach(c=>{
+      const btn = document.createElement('button');
+      btn.className = 'cat-btn' + (c.key === selectedCategory ? ' selected' : '');
+      btn.innerHTML = `<span>${c.icon}</span><span>${c.label}</span>`;
+      btn.onclick = () => { selectedCategory = c.key; applyFilters(); renderCategories(); };
+      catBar.appendChild(btn);
+    });
+  }
+  renderCategories();
+
+  // Load items
+  async function loadItems(){
+    const { data, error } = await supabase.from('items').select('*').order('created_at',{ascending:false});
+    if(error){ console.error(error); return; }
+    allItems = data || [];
+    applyFilters();
+  }
+  await loadItems();
+
+  // Realtime updates
+  supabase.channel('items-channel')
+    .on('postgres_changes', { event: 'INSERT', schema:'public', table:'items' }, ()=> loadItems())
+    .on('postgres_changes', { event: 'DELETE', schema:'public', table:'items' }, ()=> loadItems())
+    .subscribe();
+
+  // Apply filters
+  function applyFilters(){
+    const q = (searchInput.value||'').toLowerCase().trim();
+    const priceSel = priceFilter.value;
+    const filtered = allItems.filter(it=>{
+      const catOk = !selectedCategory || it.category === selectedCategory;
+      const text = ((it.name||'') + ' ' + (it.description||'') + ' ' + (it.location||'') + ' ' + (it.donor_name||'')).toLowerCase();
+      const searchOk = q === '' || text.includes(q);
+      const priceOk = priceSel === '' || (priceSel === '0' && Number(it.price) === 0) || (priceSel === 'paid' && Number(it.price) > 0);
+      return catOk && searchOk && priceOk;
+    });
+    renderItems(filtered);
+  }
+
+  function renderItems(items){
+    itemsGrid.innerHTML = '';
+    if(!items.length) itemsGrid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--muted)">No items found.</div>';
+    items.forEach(it=>{
+      const card = document.createElement('div'); card.className='card';
+      card.innerHTML = `<img src="${it.image_url||''}" alt=""><div class="title">${escapeHtml(it.name)}</div><div class="meta"><div class="price">${it.price==0?'Free':'$'+parseFloat(it.price).toFixed(2)}</div><div class="location">${escapeHtml(it.location||'')}</div></div>`;
+      card.onclick = ()=> openModal(it);
+      itemsGrid.appendChild(card);
+    });
+  }
+
+  // Helpers
+  function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  searchInput.addEventListener('input', applyFilters);
+  priceFilter.addEventListener('change', applyFilters);
+
+  // Modal
+  function openModal(item){
+    selectedItem = item;
+    modalImg.src = item.image_url || '';
+    modalName.textContent = item.name || '';
+    modalCategory.textContent = item.category || '';
+    modalPrice.textContent = item.price==0?'Free':'$'+parseFloat(item.price).toFixed(2);
+    modalLocation.textContent = item.location || '';
+    modalDesc.textContent = item.description || '';
+    modalDonor.textContent = item.donor_name || '';
+    modalEmail.textContent = item.donor_email || '';
+    modalEmail.href = 'mailto:' + (item.donor_email || '');
+
+    const today = new Date(), min = today.toISOString().split('T')[0];
+    const max = new Date(); max.setDate(today.getDate()+7); const maxStr = max.toISOString().split('T')[0];
+    pickupDate.min = min; pickupDate.max = maxStr; pickupDate.value = min;
+
+    document.getElementById('modalBg').style.display = 'flex';
+  }
+
+  function closeModal(){ document.getElementById('modalBg').style.display = 'none'; selectedItem = null; }
+  closeX.addEventListener('click', closeModal);
+  document.getElementById('modalBg').addEventListener('click',(e)=>{ if(e.target===document.getElementById('modalBg')) closeModal(); });
+
+  // Get item -> delete from supabase + store reservation locally
+  getBtn.addEventListener('click', async ()=>{
+    if(!selectedItem) return;
+    const dateVal = pickupDate.value;
+    if(!dateVal){ alert('Please choose pickup date'); return; }
+    getBtn.disabled = true;
+    const { error } = await supabase.from('items').delete().eq('id', selectedItem.id);
+    if(error){ alert('Failed to reserve item'); getBtn.disabled = false; return; }
+    // store reservation locally
+    const rs = JSON.parse(localStorage.getItem('shm_my_reservations') || '[]');
+    rs.unshift({ id:selectedItem.id, name:selectedItem.name, pickup:dateVal, reserved_at:new Date().toISOString(), image_url:selectedItem.image_url || '' });
+    localStorage.setItem('shm_my_reservations', JSON.stringify(rs.slice(0,20)));
+    alert('Reserved for '+dateVal);
+    await loadItems(); closeModal();
+  });
+</script>
+</body>
+</html>

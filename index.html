@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Second-Hand Market — Home</title>
+  <style>
+    :root{
+      --accent:#2f8f4f; --text:#163033; --muted:#8ba0a4; --bg:#f4f7f8; --card:#fff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--text)}
+    .navbar{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.05);position:sticky;top:0;z-index:10}
+    .nav-links{display:flex;gap:10px}
+    .nav-links a{padding:8px 12px;border-radius:8px;text-decoration:none;color:var(--text);font-weight:600}
+    .nav-links a.active{background:var(--accent);color:#fff}
+    .nav-links a:hover{background:#eef3f1}
+    .auth-area a{padding:8px 12px;border-radius:8px;text-decoration:none;background:#eef3f1}
+    .hero{height:320px;background:url('https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1400&q=80') center/cover no-repeat;position:relative;display:flex;align-items:center;justify-content:center}
+    .hero-overlay{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+    .hero-content{position:relative;color:#fff;text-align:center;padding:16px}
+    .hero-title{font-size:34px;margin:0 0 12px;font-weight:800}
+    .search-box{display:flex;align-items:center;gap:10px;background:#fff;padding:10px;border-radius:12px;max-width:720px;width:85%;border:1px solid #e4ecea}
+    .search-label{font-weight:700;color:#2b3d3b;margin-left:6px}
+    .search-input{flex:1;border:0;outline:none;font-size:16px}
+    .section{padding:20px;max-width:1100px;margin:0 auto}
+    .section h2{margin:0 0 12px}
+    .items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+    .card{background:#fff;border-radius:12px;padding:10px;box-shadow:0 6px 18px rgba(0,0,0,0.04);cursor:pointer;display:flex;flex-direction:column}
+    .card img{width:100%;height:150px;object-fit:cover;border-radius:8px;background:#f0f3f5}
+    .card .title{margin-top:10px;font-weight:700}
+    .card .meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+    .price{color:var(--accent);font-weight:800}
+    .location{color:var(--muted);font-size:13px}
+    footer{text-align:center;padding:18px;margin-top:18px;color:var(--muted)}
+    @media(max-width:600px){.hero{height:220px}.hero-title{font-size:22px}}
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-links">
+      <a href="index.html" id="nav-home" class="active">Home</a>
+      <a href="browse.html" id="nav-browse">Browse</a>
+      <a href="donate.html" id="nav-donate">Donate</a>
+      <a href="reservations.html" id="nav-res">Reservations</a>
+      <a href="about.html" id="nav-about">About</a>
+      <a href="contact.html" id="nav-contact">Contact</a>
+    </div>
+    <div class="auth-area">
+      <a id="nav-login" href="login.html">Login</a>
+      <a id="nav-logout" href="#" style="display:none;background:#d9534f;color:#fff">Logout</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <h1 class="hero-title">Give it a Second Life</h1>
+      <div style="margin-top:8px" class="search-box">
+        <div class="search-label">Search:</div>
+        <input id="homeSearch" class="search-input" placeholder="Clothes, electronics, furniture..." />
+      </div>
+    </div>
+  </header>
+
+  <main class="section">
+    <h2>Latest Donations</h2>
+    <div id="homeItems" class="items-grid"></div>
+    <div style="text-align:center;margin-top:14px">
+      <a href="browse.html" style="display:inline-block;padding:10px 18px;border-radius:10px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700">See More Items</a>
+    </div>
+  </main>
+
+  <footer>
+    #ReuseReduceRevive
+  </footer>
+
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+    // ---------- Supabase config ----------
+    const SUPABASE_URL = 'https://jdxdqmggyxhdycfmvygw.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkeGRxbWdneXhoZHljZm12eWd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0OTAxNzYsImV4cCI6MjA3OTA2NjE3Nn0.HFwu8W_oAsY-enrdYbe-pqBYaWY6TECAruW-yINYNrE';
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Elements
+    const homeItems = document.getElementById('homeItems');
+    const homeSearch = document.getElementById('homeSearch');
+    const navLogin = document.getElementById('nav-login');
+    const navLogout = document.getElementById('nav-logout');
+    const navRes = document.getElementById('nav-res');
+
+    // Check session and toggle auth UI
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      const session = data?.session;
+      if (session) {
+        navLogin.style.display = 'none';
+        navLogout.style.display = 'inline-block';
+        navRes.style.pointerEvents = 'auto';
+      } else {
+        navLogin.style.display = 'inline-block';
+        navLogout.style.display = 'none';
+      }
+    }
+    checkAuth();
+
+    navLogout.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await supabase.auth.signOut();
+      location.reload();
+    });
+
+    // Load latest 4 items
+    async function loadLatest(){
+      const { data, error } = await supabase
+        .from('items')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(4);
+
+      if (error) { console.error('loadLatest error', error); return; }
+      renderHomeItems(data || []);
+    }
+
+    function renderHomeItems(list){
+      homeItems.innerHTML = '';
+      if(!list.length) homeItems.innerHTML = '<div style="grid-column:1/-1;color:#6d7f80;padding:20px;text-align:center">No items yet.</div>';
+      list.forEach(it=>{
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `
+          <img src="${it.image_url ?? ''}" alt="${(it.name||'Item')}">
+          <div class="title">${it.name}</div>
+          <div class="meta"><div class="price">${it.price==0?'Free':'$'+parseFloat(it.price).toFixed(2)}</div><div class="location">${it.location||''}</div></div>
+        `;
+        div.onclick = () => window.location.href = 'browse.html?item=' + encodeURIComponent(it.id);
+        homeItems.appendChild(div);
+      });
+    }
+    await loadLatest();
+
+    // Realtime subscription: update homepage when items change
+    const sub = supabase.channel('public:items')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'items' }, payload => {
+        // load again to show latest 4
+        loadLatest();
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'items' }, payload => {
+        loadLatest();
+      })
+      .subscribe();
+
+    // Search redirect
+    homeSearch.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){
+        const q = homeSearch.value.trim();
+        if(q) window.location.href = 'browse.html?q=' + encodeURIComponent(q);
+      }
+    });
+
+  </script>
+</body>
+</html>

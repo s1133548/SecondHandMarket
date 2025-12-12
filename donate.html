@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Donate / Post Item</title>
+<style>
+  :root{--accent:#2f8f4f;--muted:#8b9a9a}
+  body{margin:0;font-family:system-ui,Arial;background:#f6f9f9;color:#153033;padding:18px}
+  .wrap{max-width:900px;margin:12px auto;background:#fff;padding:22px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.06)}
+  h1{text-align:center}
+  .field{margin-bottom:12px}
+  input[type=text],input[type=email],input[type=number],select,textarea{width:100%;padding:12px;border-radius:8px;border:1px solid #e1eaeb;background:#fbfdfe}
+  .row{display:flex;gap:12px}
+  .row .col{flex:1}
+  .file-label{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:8px;border:1px solid #e9eef0;background:#fff}
+  button{background:var(--accent);color:#fff;padding:12px 16px;border-radius:10px;border:0;cursor:pointer;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Donate or Sell an Item</h1>
+    <form id="donateForm">
+      <div class="field"><input id="fullName" type="text" placeholder="Full Name" required/></div>
+      <div class="field"><input id="email" type="email" placeholder="Email address" required/></div>
+      <div class="field"><input id="itemName" type="text" placeholder="Item name" required/></div>
+      <div class="field">
+        <select id="category" required>
+          <option value="">Select category</option>
+          <option>Clothes</option><option>Electronics</option><option>Furniture</option><option>Kitchenware</option><option>Books</option><option>Other</option>
+        </select>
+      </div>
+      <div class="row">
+        <div class="col field"><input id="location" type="text" placeholder="Location (City/Town)" required/></div>
+        <div class="col field"><input id="price" type="number" placeholder="Price (0 = donation)" min="0" step="0.01" value="0" required/></div>
+      </div>
+      <div class="field"><textarea id="description" placeholder="Short description" rows="4" required></textarea></div>
+      <div class="field">
+        <label class="file-label"><span id="fileName">Choose an image (max 5MB)</span>
+          <input id="imageUpload" type="file" accept="image/*" style="display:none"/>
+          <button type="button" id="chooseBtn" style="background:#fff;color:var(--accent);border:1px solid #e0e6e9;padding:8px 10px;border-radius:8px">Choose file</button>
+        </label>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button id="submitBtn" type="submit">Submit Item</button>
+        <div id="loading" style="display:none">Uploading…</div>
+      </div>
+    </form>
+  </div>
+
+<script type="module">
+  // ---------- Firebase config (for image storage) ----------
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+  import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
+  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDr1I8gvzidt-RTFCDuLvv_pxwjUQpuvVg",
+    authDomain: "second-hand-market-ac9f1.firebaseapp.com",
+    projectId: "second-hand-market-ac9f1",
+    storageBucket: "second-hand-market-ac9f1.firebasestorage.app",
+    messagingSenderId: "346650617019",
+    appId: "1:346650617019:web:2ed646f43df061ec72b59e"
+  };
+
+  const app = initializeApp(FIREBASE_CONFIG);
+  const fbAuth = getAuth(app);
+  const storage = getStorage(app);
+
+  // ---------- Supabase ----------
+  const SUPABASE_URL = 'https://jdxdqmggyxhdycfmvygw.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkeGRxbWdneXhoZHljZm12eWd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0OTAxNzYsImV4cCI6MjA3OTA2NjE3Nn0.HFwu8W_oAsY-enrdYbe-pqBYaWY6TECAruW-yINYNrE';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // DOM
+  const form = document.getElementById('donateForm');
+  const imageInput = document.getElementById('imageUpload');
+  const chooseBtn = document.getElementById('chooseBtn');
+  const fileName = document.getElementById('fileName');
+  const submitBtn = document.getElementById('submitBtn');
+  const loadingText = document.getElementById('loading');
+
+  chooseBtn.addEventListener('click', ()=> imageInput.click());
+  imageInput.addEventListener('change', ()=> { const f = imageInput.files[0]; fileName.textContent = f ? f.name : 'Choose an image (max 5MB)'; });
+
+  // ensure firebase anonymous auth for storage
+  async function ensureAnon() {
+    if (!fbAuth.currentUser) {
+      try { await signInAnonymously(fbAuth); }
+      catch(e){ console.error('Firebase anon sign-in failed', e); throw e; }
+    }
+  }
+
+  async function uploadImage(file){
+    if(!file) return null;
+    if(file.size > 5 * 1024 * 1024) throw new Error('Image too large');
+    const ts = Date.now();
+    const path = `items/${ts}_${file.name.replace(/\s+/g,'_')}`;
+    const ref = storageRef(storage, path);
+    return new Promise((resolve,reject)=>{
+      const task = uploadBytesResumable(ref, file);
+      task.on('state_changed', ()=>{}, (err)=>reject(err), async ()=> {
+        try { const url = await getDownloadURL(task.snapshot.ref); resolve(url); } catch(e){reject(e);}
+      });
+    });
+  }
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    submitBtn.disabled = true;
+    loadingText.style.display = 'inline';
+
+    try{
+      const donor_name = document.getElementById('fullName').value.trim();
+      const donor_email = document.getElementById('email').value.trim();
+      const name = document.getElementById('itemName').value.trim();
+      const category = document.getElementById('category').value;
+      const location = document.getElementById('location').value.trim();
+      const price = parseFloat(document.getElementById('price').value) || 0;
+      const description = document.getElementById('description').value.trim();
+
+      if(!donor_name||!donor_email||!name||!category||!location){ throw new Error('Please fill required fields'); }
+
+      await ensureAnon();
+
+      const file = imageInput.files[0];
+      let image_url = null;
+      if(file) image_url = await uploadImage(file);
+
+      const type = price === 0 ? 'Donation' : 'For Sale';
+
+      const row = { name, description, category, price, location, image_url, donor_name, donor_email, type };
+
+      const { data, error } = await supabase.from('items').insert([row]);
+      if(error) throw error;
+
+      // reset
+      form.reset();
+      fileName.textContent = 'Choose an image (max 5MB)';
+      alert('Item submitted as: ' + type);
+
+      // notify via realtime (Supabase will insert and browse/index will update via subscription)
+    }catch(err){
+      console.error(err);
+      alert(err.message || 'Error submitting item');
+    }finally{
+      submitBtn.disabled = false;
+      loadingText.style.display = 'none';
+    }
+  });
+</script>
+</body>
+</html>
